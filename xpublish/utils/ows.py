@@ -23,6 +23,41 @@ class DataValidationError(KeyError):
     pass
 
 
+class FieldValidator:
+    def __init__(self, validators=(), default=None):
+        self.validators = validators
+        self.default = default
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+        return instance.__dict__.get(self.name, self.default)
+
+    def __delete__(self, instance):
+        del instance.__dict__[self.name]
+
+    def __set__(self, instance, value):
+        for validator in self.validators:
+            if value is not self:
+                validator(value)
+                instance.__dict__[self.name] = value
+            else:
+                instance.__dict__[self.name] = self.default
+
+
+def validate_crs(crs_epsg):
+    if crs_epsg not in WEB_CRS.keys():
+        raise DataValidationError(f"User input {crs_epsg} not supported")
+
+
+def validate_color_mapping(value):
+    if value.get("datashader_settings") is None:
+        raise DataValidationError(f"User input {crs_epsg} not supported")
+
+
 class LayerOptionsMixin:
     def set_options(self, crs_epsg: int = 3857, color_mapping: dict = {}) -> None:
 
@@ -33,6 +68,14 @@ class LayerOptionsMixin:
             raise DataValidationError(f"User input {crs_epsg} not supported")
 
         self.TMS = morecantile.tms.get(WEB_CRS[crs_epsg])
+
+
+def query_builder(time, xleft, xright, ybottom, ytop, xlab, ylab):
+    query = {}
+    query.update({xlab: slice(xleft, xright), ylab: slice(ytop, ybottom)})
+    if time:
+        query["time"] = time
+    return query
 
 
 def get_bounds(TMS, zoom, x, y):

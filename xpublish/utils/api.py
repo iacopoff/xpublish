@@ -41,6 +41,8 @@ def normalize_app_routers(routers: list, prefix: str) -> List[Tuple[APIRouter, D
     for rt in routers:
         if isinstance(rt, APIRouter):
             new_routers.append((rt, {'prefix': prefix}))
+        elif isinstance(rt.router, APIRouter):
+            new_routers.append((rt.router, {'prefix': prefix}))
         elif isinstance(rt, tuple) and isinstance(rt[0], APIRouter) and len(rt) == 2:
             rt_kwargs = rt[1]
             rt_kwargs['prefix'] = prefix + rt_kwargs.get('prefix', '')
