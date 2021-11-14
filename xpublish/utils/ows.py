@@ -55,19 +55,9 @@ def validate_crs(crs_epsg):
 
 def validate_color_mapping(value):
     if value.get("datashader_settings") is None:
-        raise DataValidationError(f"User input {crs_epsg} not supported")
-
-
-class LayerOptionsMixin:
-    def set_options(self, crs_epsg: int = 3857, color_mapping: dict = {}) -> None:
-
-        self.datashader_settings = color_mapping.get("datashader_settings")
-        self.matplotlib_settings = color_mapping.get("matplotlib_settings")
-
-        if crs_epsg not in WEB_CRS.keys():
-            raise DataValidationError(f"User input {crs_epsg} not supported")
-
-        self.TMS = morecantile.tms.get(WEB_CRS[crs_epsg])
+        raise DataValidationError(
+            f"The key 'datashader_settings' is missing from {value}"
+        )
 
 
 def query_builder(time, xleft, xright, ybottom, ytop, xlab, ylab):
@@ -112,21 +102,3 @@ def get_image_datashader(tile, datashader_settings, format):
     img_io = img.to_bytesio(format)
 
     return img_io.read()
-
-
-def get_legend():
-    pass
-
-
-def validate_dataset(dataset):
-    dims = dataset.dims
-    if "x" not in dims or "y" not in dims:
-        raise DataValidationError(
-            f" Expected spatial dimension names 'x' and 'y', found: {dims}"
-        )
-    if "time" not in dims and len(dims) >= 3:
-        raise DataValidationError(
-            f" Expected time dimension name 'time', found: {dims}"
-        )
-    if len(dims) > 4:
-        raise DataValidationError(f" Not implemented for dimensions > 4")

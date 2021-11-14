@@ -12,7 +12,6 @@ from xpublish.dependencies import get_dataset, get_cache
 from xpublish.utils.ows import (
     get_image_datashader,
     get_bounds,
-    LayerOptionsMixin,
     get_tiles,
     query_builder,
     FieldValidator,
