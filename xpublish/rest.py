@@ -130,7 +130,7 @@ class Rest:
         self._cache_kws = {'available_bytes': 1e6}
         if cache_kws is not None:
             self._cache_kws.update(cache_kws)
-        self._server_flag = None
+        self._server_flag = False
 
     @property
     def cache(self) -> cachey.Cache:
@@ -240,7 +240,7 @@ class Rest:
         return server.serve()
 
     def shutdown(self):
-        self._server_flag = None
+        self._server_flag = False
         self.server.handle_exit("","")
         
 
