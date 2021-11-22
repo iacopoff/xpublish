@@ -1,6 +1,7 @@
 """
 Helper functions to use a FastAPI dependencies.
 """
+from copy import deepcopy
 import cachey
 import xarray as xr
 from fastapi import Depends
@@ -83,4 +84,4 @@ def get_zmetadata(
         # we want to permanently cache this: set high cost value
         cache.put(cache_key, zmeta, 99999)
 
-    return zmeta
+    return deepcopy(zmeta)
