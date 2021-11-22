@@ -12,6 +12,8 @@ from .utils.api import (
     normalize_datasets,
 )
 
+import threading
+import asyncio      
 
 def _dataset_from_collection_getter(datasets):
     """Used to override the get_dataset FastAPI dependency in case where
@@ -62,7 +64,6 @@ def _set_app_routers(dataset_routers=None, dataset_route_prefix=''):
     check_route_conflicts(app_routers)
 
     return app_routers
-
 
 class Rest:
     """Used to publish one or more Xarray Datasets via a REST API (FastAPI application).
@@ -129,6 +130,7 @@ class Rest:
         self._cache_kws = {'available_bytes': 1e6}
         if cache_kws is not None:
             self._cache_kws.update(cache_kws)
+        self._server_flag = None
 
     @property
     def cache(self) -> cachey.Cache:
@@ -183,7 +185,41 @@ class Rest:
         This method is blocking and does not return.
 
         """
+
         uvicorn.run(self.app, host=host, port=port, log_level=log_level, **kwargs)
+
+    def serve_in_thread(self, host='0.0.0.0', port=9000, log_level='debug', **kwargs):
+        """Serve this FastAPI application via :func:`uvicorn.Server.serve`.
+
+        Parameters
+        ----------
+        host : str
+            Bind socket to this host.
+        port : int
+            Bind socket to this port.
+        log_level : str
+            App logging level, valid options are
+            {'critical', 'error', 'warning', 'info', 'debug', 'trace'}.
+        **kwargs :
+            Additional arguments to be passed to :func:`uvicorn.run`.
+
+        Notes
+        -----
+        This method is non-blocking.
+
+        """
+        config = uvicorn.Config(self.app, host=host, port=port, log_level=log_level, **kwargs)
+        if not self._server_flag:
+            self.server = uvicorn.Server(config)     
+            t = threading.Thread(target = lambda: asyncio.run(self.server.serve()))
+            t.start()
+            self._server_flag = True
+
+
+    def shutdown(self):
+        self._server_flag = None
+        self.server.handle_exit("","")
+        
 
 
 @xr.register_dataset_accessor('rest')
