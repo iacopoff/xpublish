@@ -4,6 +4,11 @@ import cachey
 from fastapi import APIRouter, Depends, Response, Query, Path
 from typing import Optional
 import morecantile
+import io
+from PIL import Image
+import numpy as np
+from matplotlib import cm
+import matplotlib.colors as colors
 
 from .factory import XpublishFactory
 from xpublish.utils.cache import CostTimer
@@ -29,6 +34,16 @@ class XYZFactory(XpublishFactory):
     color_mapping: dict = FieldValidator(
         default={}, validators=(validate_color_mapping,)
     )
+
+    transformers: list = field(default_factory=lambda: [])
+
+    trsf_names: list = field(default_factory=lambda: [], init=False)
+
+    def __post_init__(self):
+        super().__post_init__()
+        for t in self.transformers:
+            self.trsf_names.append(t.__name__)
+            setattr(self, t.__name__, t)
 
     def register_routes(self):
         @self.router.get("/tiles/{var}/{z}/{x}/{y}")
@@ -70,7 +85,15 @@ class XYZFactory(XpublishFactory):
             if response is None:
                 with CostTimer() as ct:
 
+                    # transformer 0: over the whole dataset
+                    if self("transform0", dataset):
+                        return
+
                     tile = get_tiles(var, dataset, query)
+
+                    # transformer 1: over each individual tile
+                    if self("transform1", tile):
+                        return
 
                     byte_image = get_image_datashader(tile, datashader_settings, format)
 
@@ -81,3 +104,10 @@ class XYZFactory(XpublishFactory):
                 cache.put(cache_key, response, ct.time, len(byte_image))
 
             return response
+
+    def __call__(self, name, array, *args, **kwargs):
+        if name in self.trsf_names:
+            f = getattr(self, name)
+            if f(array, *args, **kwargs):
+                return True
+        return False

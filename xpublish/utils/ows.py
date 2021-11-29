@@ -77,10 +77,7 @@ def get_bounds(TMS, zoom, x, y):
 
 def get_tiles(var, dataset, query) -> xr.DataArray:
 
-    if query.get("time"):
-        tile = dataset[var].sel(query)  # noqa
-    else:
-        tile = dataset[var].sel(query)  # noqa
+    tile = dataset[var].sel(query)  # noqa
 
     if 0 in tile.sizes.values():
         raise HTTPException(status_code=406, detail=f"Map outside dataset domain")
@@ -95,9 +92,13 @@ def get_image_datashader(tile, datashader_settings, format):
 
     cvs = ds.Canvas(plot_width=256, plot_height=256)
 
+    # aggregate to fixed sized grid (with reduction)
     agg = cvs.raster(tile, **raster_param)
 
+    # shading (color mapping)
     img = tf.shade(agg, **shade_param)
+
+    # image to byte
 
     img_io = img.to_bytesio(format)
 
