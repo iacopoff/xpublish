@@ -23,6 +23,7 @@ from xpublish.utils.ows import (
     validate_crs,
     validate_color_mapping,
     WEB_CRS,
+    DataShader
 )
 
 
@@ -31,19 +32,27 @@ class XYZFactory(XpublishFactory):
 
     crs_epsg: int = FieldValidator(default=4326, validators=(validate_crs,))
 
-    color_mapping: dict = FieldValidator(
-        default={}, validators=(validate_color_mapping,)
-    )
+    # color_mapping: dict = FieldValidator(
+    #     default={}, validators=(validate_color_mapping,)
+    # )
 
     transformers: list = field(default_factory=lambda: [])
 
     trsf_names: list = field(default_factory=lambda: [], init=False)
+
+    renderer: DataShader = field(default=None)
 
     def __post_init__(self):
         super().__post_init__()
         for t in self.transformers:
             self.trsf_names.append(t.__name__)
             setattr(self, t.__name__, t)
+
+        if self.renderer is None:
+            self.renderer = DataShader(
+                                aggregation={}, 
+                                color_mapping={"cmap": ["blue","red"]}
+                            )
 
     def register_routes(self):
         @self.router.get("/tiles/{var}/{z}/{x}/{y}")
@@ -67,7 +76,7 @@ class XYZFactory(XpublishFactory):
         ):
 
             # color mapping settings
-            datashader_settings = self.color_mapping.get("datashader_settings")
+            #datashader_settings = self.color_mapping.get("datashader_settings")
 
             TMS = morecantile.tms.get(WEB_CRS[self.crs_epsg])
 
@@ -86,16 +95,27 @@ class XYZFactory(XpublishFactory):
                 with CostTimer() as ct:
 
                     # transformer 0: over the whole dataset
-                    if self("transform0", dataset):
-                        return
+                    if self("transform0", dataset): return
 
                     tile = get_tiles(var, dataset, query)
 
                     # transformer 1: over each individual tile
-                    if self("transform1", tile):
-                        return
+                    if self("transform1", tile): return
+                    #breakpoint()
+                    #byte_image = get_image_datashader(tile, datashader_settings, format)
+                    
+                    tile = self.renderer.interpolation(tile)
+                    tile = self.renderer.aggregation(tile)
+                    tile = self.renderer.normalization(tile)
+                    img = self.renderer.color_mapping(tile)
 
-                    byte_image = get_image_datashader(tile, datashader_settings, format)
+                    if self.renderer.__class__.__name__ == "DataShader":
+                        img_io = img.to_bytesio(format)
+                        byte_image = img_io.read()
+                    else:
+                        buffer = io.BytesIO()
+                        img.save(buffer, format="PNG")
+                        byte_image = buffer.getvalue()
 
                     response = Response(
                         content=byte_image, media_type=f"image/{format}"
@@ -111,3 +131,4 @@ class XYZFactory(XpublishFactory):
             if f(array, *args, **kwargs):
                 return True
         return False
+

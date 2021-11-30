@@ -4,6 +4,10 @@ import xarray as xr
 from fastapi import HTTPException
 import morecantile
 
+from matplotlib import cm
+from functools import partial
+from numpy import uint8
+from PIL import Image
 
 # From Morecantile, morecantile.tms.list()
 WEB_CRS = {
@@ -77,7 +81,7 @@ def get_bounds(TMS, zoom, x, y):
 
 def get_tiles(var, dataset, query) -> xr.DataArray:
 
-    tile = dataset[var].sel(query)  # noqa
+    tile = dataset[var].sel(query)
 
     if 0 in tile.sizes.values():
         raise HTTPException(status_code=406, detail=f"Map outside dataset domain")
@@ -99,7 +103,79 @@ def get_image_datashader(tile, datashader_settings, format):
     img = tf.shade(agg, **shade_param)
 
     # image to byte
-
     img_io = img.to_bytesio(format)
 
     return img_io.read()
+
+
+class Base:
+    
+    def __init__(self, interpolation={}, aggregation={}, normalization={}, color_mapping={}):
+        self.interp_params = interpolation
+        self.agg_params = aggregation
+        self.norm_params = normalization
+        self.cm_params = color_mapping
+
+    def interpolation(self, arr):
+        return arr
+        
+    def aggregation(self, arr):
+        return arr
+    
+    def normalization(self, arr):
+        return arr
+    
+    def color_mapping(self, arr):
+        return arr
+
+
+
+class DataShader(Base):
+    
+    def __init__(self, aggregation, color_mapping):
+        super().__init__(aggregation=aggregation, color_mapping=color_mapping)
+        
+    def aggregation(self, tile):
+        self.cvs = ds.Canvas(plot_width=256, plot_height=256)
+        agg = self.cvs.raster(tile, **self.agg_params) 
+        return agg
+    
+    def color_mapping(self, agg):
+        img = tf.shade(agg, **self.cm_params)
+        return img
+
+
+class MatplotLib(Base):
+    
+    METHODS = {"LogNorm":cm.colors.LogNorm,"PowerNorm":cm.colors.PowerNorm}
+    
+    def __init__(self, normalization={}, color_mapping={}):
+        super().__init__(normalization=normalization, color_mapping=color_mapping)
+
+        # normalization parameters are 'method' and 'method_kwargs'
+        try:
+            self.method = self.METHODS[self.norm_params.get("method")]
+        except:
+            self.method = cm.colors.NoNorm
+            print(f"Normalization not defined, available methods are: {self.METHODS.keys()}, default is no normalization.")
+
+        self.method_kwargs = self.norm_params.get("method_kwargs", {})
+
+        if not self.cm_params.get("cm", False):
+            print("Color mapping not defined, default to viridis")
+            self.cm_params = {"cm":cm.viridis}
+        
+    def normalization(self, tile):
+        if self.method:
+            for k,f in self.method_kwargs.items():
+                if callable(f):
+                    self.method_kwargs[k] = partial(f,tile)()
+            norm = self.method(**self.method_kwargs)
+            return norm(tile)
+        else:
+            return tile
+    
+    def color_mapping(self, tile):
+        arr = cm.get_cmap(self.cm_params["cm"])(tile)
+        img = Image.fromarray(uint8(arr *255), 'RGBA')
+        return img
