@@ -16,12 +16,50 @@ from xpublish.utils.ows import (
     FieldValidator,
     validate_crs,
     WEB_CRS,
-    DataShaderBase,
+    DataShader,
+    Renderer
 )
 
 
 @dataclass
 class XYZFactory(XpublishFactory):
+    r"""Class factory for the XYZ router.
+
+    Parameters
+    ----------
+    crs_epsg : int
+        Set the EPSG code according to the dataset's coordinate reference system (CRS).
+        The ``morecantile`` package uses it to create the dataset tiles.  
+        Supported EPSGs are:
+            3857: "WebMercatorQuad"
+            32631: "UTM31WGS84Quad"
+            3978: "CanadianNAD83_LCC"
+            5482: "LINZAntarticaMapTilegrid"
+            4326: "WorldCRS84Quad"
+            5041: "UPSAntarcticWGS84Quad"
+            3035: "EuropeanETRS89_LAEAQuad"
+            3395: "WorldMercatorWGS84Quad"
+            2193: "NZTM2000"
+    transformers : list, optional
+        Callback functions to perform operations on the arrays.
+        There are 2 supported transformers:
+            transform0 -> applied to the whole dataset
+            transform1 -> applied to each tile
+    renderer : :class:`Renderer`
+        The class that configures the rendering of the tiles. 
+        Default to the subclass :meth:xpublish.utils.ows.DataShader
+    Returns
+    -------
+
+    Raises
+    ------
+
+    Examples
+    --------
+    Create a transformer that 
+        example: ``def transform1(arr, *args, **kwargs):
+                    arr[:50,:50] = 0``
+    """
 
     crs_epsg: int = FieldValidator(default=4326, validators=(validate_crs,))
 
@@ -29,16 +67,18 @@ class XYZFactory(XpublishFactory):
 
     trsf_names: list = field(default_factory=lambda: [], init=False)
 
-    renderer: DataShaderBase = field(default=None)
+    renderer: Renderer = field(default=None)
 
     def __post_init__(self):
+        
         super().__post_init__()
+
         for t in self.transformers:
             self.trsf_names.append(t.__name__)
             setattr(self, t.__name__, t)
 
         if self.renderer is None:
-            self.renderer = DataShaderBase(
+            self.renderer = DataShader(
                 aggregation={}, color_mapping={"cmap": ["blue", "red"]}
             )
 
@@ -62,9 +102,6 @@ class XYZFactory(XpublishFactory):
             cache: cachey.Cache = Depends(get_cache),
             dataset: xr.Dataset = Depends(get_dataset),
         ):
-
-            # color mapping settings
-            # datashader_settings = self.color_mapping.get("datashader_settings")
 
             TMS = morecantile.tms.get(WEB_CRS[self.crs_epsg])
 
@@ -117,5 +154,5 @@ class XYZFactory(XpublishFactory):
         if name in self.trsf_names:
             f = getattr(self, name)
             if f(array, *args, **kwargs):
-                return True
+                return True      
         return False

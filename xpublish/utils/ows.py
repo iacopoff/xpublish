@@ -23,7 +23,7 @@ WEB_CRS = {
 }
 
 
-class DataValidationError(KeyError):
+class ParameterInputError(KeyError):
     pass
 
 
@@ -54,14 +54,7 @@ class FieldValidator:
 
 def validate_crs(crs_epsg):
     if crs_epsg not in WEB_CRS.keys():
-        raise DataValidationError(f"User input {crs_epsg} not supported")
-
-
-def validate_color_mapping(value):
-    if value.get("datashader_settings") is None:
-        raise DataValidationError(
-            f"The key 'datashader_settings' is missing from {value}"
-        )
+        raise ParameterInputError(f"User input {crs_epsg} not supported")
 
 
 def query_builder(time, xleft, xright, ybottom, ytop, xlab, ylab):
@@ -89,7 +82,7 @@ def get_tiles(var, dataset, query) -> xr.DataArray:
     return tile
 
 
-class Base:
+class Renderer:
     def __init__(
         self, interpolation={}, aggregation={}, normalization={}, color_mapping={}
     ):
@@ -111,7 +104,7 @@ class Base:
         return arr
 
 
-class DataShaderBase(Base):
+class DataShader(Renderer):
     def __init__(self, aggregation={}, color_mapping={}):
         super().__init__(aggregation=aggregation, color_mapping=color_mapping)
 
@@ -125,7 +118,7 @@ class DataShaderBase(Base):
         return img
 
 
-class MatplotLibBase(Base):
+class MatplotLib(Renderer):
     def __init__(self, normalization={}, color_mapping={}):
         super().__init__(normalization=normalization, color_mapping=color_mapping)
 
