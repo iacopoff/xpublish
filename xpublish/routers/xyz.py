@@ -120,19 +120,20 @@ class XYZFactory(XpublishFactory):
                 with CostTimer() as ct:
 
                     # transformer 0: over the whole dataset
-                    if self("transform0", dataset):
-                        return
+                    dataset = self("transform0", dataset)
 
                     tile = get_tiles(var, dataset, query)
 
-                    # transformer 1: over each individual tile
-                    if self("transform1", tile):
-                        return
+                    # transformer 1: over each individual tile before rendering
+                    tile =  self("transform1", tile)
 
                     tile = self.renderer.interpolation(tile)
                     tile = self.renderer.aggregation(tile)
                     tile = self.renderer.normalization(tile)
                     img = self.renderer.color_mapping(tile)
+
+                    # transformer 2: over each individual tile before saving to image
+                    tile =  self("transform2", tile)
 
                     if self.renderer.__class__.__name__ == "DataShader":
                         img_io = img.to_bytesio(format)
@@ -153,6 +154,6 @@ class XYZFactory(XpublishFactory):
     def __call__(self, name, array, *args, **kwargs):
         if name in self.trsf_names:
             f = getattr(self, name)
-            if f(array, *args, **kwargs):
-                return True      
-        return False
+            arr = f(array, *args, **kwargs)
+            return arr
+        return array
