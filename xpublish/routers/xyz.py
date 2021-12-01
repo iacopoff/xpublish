@@ -17,19 +17,19 @@ from xpublish.utils.ows import (
     validate_crs,
     WEB_CRS,
     DataShader,
-    Renderer
+    Render,
 )
 
 
 @dataclass
 class XYZFactory(XpublishFactory):
-    r"""Class factory for the XYZ router.
+    r"""Class factory for the XYZ router
 
     Parameters
     ----------
     crs_epsg : int
-        Set the EPSG code according to the dataset's coordinate reference system (CRS).
-        The ``morecantile`` package uses it to create the dataset tiles.  
+        Set the EPSG code according to the xarray.Dataset's coordinate reference system (CRS).
+        The EPSG code is used in the ``morecantile`` package to create the tiles.
         Supported EPSGs are:
             3857: "WebMercatorQuad"
             32631: "UTM31WGS84Quad"
@@ -41,13 +41,18 @@ class XYZFactory(XpublishFactory):
             3395: "WorldMercatorWGS84Quad"
             2193: "NZTM2000"
     transformers : list, optional
-        Callback functions to perform operations on the arrays.
-        There are 2 supported transformers:
+        List of callback functions to perform transformation on arrays (datasets or tiles).
+        The function name must be either `transform0`, `transform1` or `transform2`.
+        Th function name correspond to the point in the workflow where the transformation is applied:
             transform0 -> applied to the whole dataset
-            transform1 -> applied to each tile
-    renderer : :class:`Renderer`
-        The class that configures the rendering of the tiles. 
-        Default to the subclass :meth:xpublish.utils.ows.DataShader
+            transform1 -> applied to each tile before rendering
+            transform2 -> applied to each tile before converting to byte image
+    render : :class:`Render`
+        The class that configures the rendering of the tiles.
+        There are two subclasses available, that correspond to the plotting library:
+        `DataShader` (default) and `MatplotLib`.
+        TODO: configuration
+
     Returns
     -------
 
@@ -56,9 +61,11 @@ class XYZFactory(XpublishFactory):
 
     Examples
     --------
-    Create a transformer that 
-        example: ``def transform1(arr, *args, **kwargs):
-                    arr[:50,:50] = 0``
+    transformer example
+
+    DataShader render example
+
+    MatplotLib render example
     """
 
     crs_epsg: int = FieldValidator(default=4326, validators=(validate_crs,))
@@ -67,18 +74,18 @@ class XYZFactory(XpublishFactory):
 
     trsf_names: list = field(default_factory=lambda: [], init=False)
 
-    renderer: Renderer = field(default=None)
+    render: Render = field(default=None)
 
     def __post_init__(self):
-        
+
         super().__post_init__()
 
         for t in self.transformers:
             self.trsf_names.append(t.__name__)
             setattr(self, t.__name__, t)
 
-        if self.renderer is None:
-            self.renderer = DataShader(
+        if self.render is None:
+            self.render = DataShader(
                 aggregation={}, color_mapping={"cmap": ["blue", "red"]}
             )
 
@@ -125,17 +132,17 @@ class XYZFactory(XpublishFactory):
                     tile = get_tiles(var, dataset, query)
 
                     # transformer 1: over each individual tile before rendering
-                    tile =  self("transform1", tile)
+                    tile = self("transform1", tile)
 
-                    tile = self.renderer.interpolation(tile)
-                    tile = self.renderer.aggregation(tile)
-                    tile = self.renderer.normalization(tile)
-                    img = self.renderer.color_mapping(tile)
+                    tile = self.render.interpolation(tile)
+                    tile = self.render.aggregation(tile)
+                    tile = self.render.normalization(tile)
+                    img = self.render.color_mapping(tile)
 
                     # transformer 2: over each individual tile before saving to image
-                    tile =  self("transform2", tile)
+                    tile = self("transform2", tile)
 
-                    if self.renderer.__class__.__name__ == "DataShader":
+                    if self.render.__class__.__name__ == "DataShader":
                         img_io = img.to_bytesio(format)
                         byte_image = img_io.read()
                     else:
