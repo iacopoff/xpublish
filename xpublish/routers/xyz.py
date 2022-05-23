@@ -140,7 +140,7 @@ class XYZFactory(XpublishFactory):
                     img = self.render.color_mapping(tile)
 
                     # transformer 2: over each individual tile before saving to image
-                    tile = self("transform2", tile)
+                    img = self("transform2", img)
 
                     if self.render.__class__.__name__ == "DataShader":
                         img_io = img.to_bytesio(format)
